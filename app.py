@@ -11,21 +11,17 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 import shutil
-
 load_dotenv()
 
 st.title("📄 Legal Document Assistant")
 
-# -------- API KEY HANDLING --------
-api_key = None
-
-if "GROQ_API_KEY" in st.secrets:
+try:
     api_key = st.secrets["GROQ_API_KEY"]
-else:
+except:
     api_key = os.getenv("GROQ_API_KEY")
 
 if not api_key:
-    st.error("GROQ_API_KEY missing. Add it in Streamlit Secrets.")
+    st.error("GROQ_API_KEY missing.")
     st.stop()
 
 os.environ["GROQ_API_KEY"] = api_key
@@ -70,7 +66,7 @@ def setup_rag():
 
     # smaller model (fewer rate limits)
     llm = ChatGroq(
-        model_name="llama3-8b-8192",
+        model_name="llama-3.1-8b-instant",
         temperature=0.1
     )
 
@@ -127,7 +123,9 @@ if st.button("Get Answer"):
                     st.success(answer)
 
                 except Exception as e:
+
                     if "RateLimitError" in str(e):
-                        st.error("⚠️ Groq API rate limit reached. Please wait a minute and try again.")
+                        st.error("⚠️ Groq API rate limit reached. Please wait 1–2 minutes and try again.")
+
                     else:
-                        st.error("⚠️ Something went wrong. Please try again.")
+                        st.error(f"⚠️ Error: {str(e)}")
