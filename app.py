@@ -35,7 +35,6 @@ os.environ["GROQ_API_KEY"] = api_key
 @st.cache_resource
 def setup_rag():
 
-    # IMPORTANT: PDF must be inside the GitHub repo
     reader = PdfReader("Health.pdf")
 
     pages_text = []
@@ -66,10 +65,12 @@ def setup_rag():
         persist_directory="chroma_db"
     )
 
-    retriever = vectordb.as_retriever(search_kwargs={"k": 6})
+    # reduced chunks to avoid rate limits
+    retriever = vectordb.as_retriever(search_kwargs={"k": 3})
 
+    # smaller model (fewer rate limits)
     llm = ChatGroq(
-        model_name="llama-3.3-70b-versatile",
+        model_name="llama3-8b-8192",
         temperature=0.1
     )
 
@@ -118,9 +119,15 @@ if st.button("Get Answer"):
 
             with st.spinner("Answering..."):
 
-                answer = chain.invoke({
-                    "context": context,
-                    "question": question
-                })
+                try:
+                    answer = chain.invoke({
+                        "context": context,
+                        "question": question
+                    })
+                    st.success(answer)
 
-            st.success(answer)
+                except Exception as e:
+                    if "RateLimitError" in str(e):
+                        st.error("⚠️ Groq API rate limit reached. Please wait a minute and try again.")
+                    else:
+                        st.error("⚠️ Something went wrong. Please try again.")
