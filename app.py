@@ -16,15 +16,27 @@ load_dotenv()
 
 st.title("📄 Legal Document Assistant")
 
-if not os.getenv("GROQ_API_KEY"):
-    st.error("GROQ_API_KEY missing in .env file")
+# -------- API KEY HANDLING --------
+api_key = None
+
+if "GROQ_API_KEY" in st.secrets:
+    api_key = st.secrets["GROQ_API_KEY"]
+else:
+    api_key = os.getenv("GROQ_API_KEY")
+
+if not api_key:
+    st.error("GROQ_API_KEY missing. Add it in Streamlit Secrets.")
     st.stop()
+
+os.environ["GROQ_API_KEY"] = api_key
+
 
 # ---------- Load PDF and create vector DB ----------
 @st.cache_resource
 def setup_rag():
 
-    reader = PdfReader(r"C:\Users\inchu\Downloads\Health.pdf")
+    # IMPORTANT: PDF must be inside the GitHub repo
+    reader = PdfReader("Health.pdf")
 
     pages_text = []
     for page in reader.pages:
@@ -86,6 +98,7 @@ Answer:
 
 
 retriever, chain = setup_rag()
+
 
 # ---------- UI ----------
 
