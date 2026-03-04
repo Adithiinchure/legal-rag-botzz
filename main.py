@@ -102,7 +102,7 @@ vectordb = Chroma.from_texts(
 )
 
 
-retriever = vectordb.as_retriever(search_kwargs={"k": 6})
+retriever = vectordb.as_retriever(search_kwargs={"k": 5})
 
 
 print("Vector DB ready")
@@ -114,7 +114,7 @@ print("Vector DB ready")
 
 
 llm = ChatGroq(
-   model_name="llama-3.3-70b-versatile",
+   model_name="llama-3.1-8b-instant",
    temperature=0.1
 )
 
