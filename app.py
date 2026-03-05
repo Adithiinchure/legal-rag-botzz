@@ -11,10 +11,27 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 import shutil
+
 load_dotenv()
 
-st.title("📄 Legal Document Assistant")
+st.set_page_config(page_title="Legal RAG Bot", layout="wide")
 
+# -------- TITLE --------
+st.title("⚖️ Legal Document RAG Chatbot")
+st.write("Upload a legal PDF and ask questions based only on the document.")
+
+# -------- SIDEBAR --------
+st.sidebar.header("📂 Upload Document")
+
+uploaded_file = st.sidebar.file_uploader(
+    "Choose a PDF file",
+    type=["pdf"]
+)
+
+process_btn = st.sidebar.button("Process Document")
+
+
+# ---------- API KEY ----------
 try:
     api_key = st.secrets["GROQ_API_KEY"]
 except:
@@ -27,26 +44,26 @@ if not api_key:
 os.environ["GROQ_API_KEY"] = api_key
 
 
-# ---------- Load PDF and create vector DB ----------
+# ---------- RAG Setup ----------
 @st.cache_resource
-def setup_rag():
+def setup_rag(uploaded_file):
 
-    reader = PdfReader("Health.pdf")
+    reader = PdfReader(uploaded_file)
 
     pages_text = []
     for page in reader.pages:
-        extracted = page.extract_text()
-        if extracted:
-            pages_text.append(extracted)
+        text = page.extract_text()
+        if text:
+            pages_text.append(text)
 
-    text = "\n".join(pages_text)
+    full_text = "\n".join(pages_text)
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200
     )
 
-    chunks = splitter.split_text(text)
+    chunks = splitter.split_text(full_text)
 
     if os.path.exists("chroma_db"):
         shutil.rmtree("chroma_db")
@@ -61,10 +78,8 @@ def setup_rag():
         persist_directory="chroma_db"
     )
 
-    # reduced chunks to avoid rate limits
     retriever = vectordb.as_retriever(search_kwargs={"k": 3})
 
-    # smaller model (fewer rate limits)
     llm = ChatGroq(
         model_name="llama-3.1-8b-instant",
         temperature=0.1
@@ -73,10 +88,11 @@ def setup_rag():
     prompt = PromptTemplate(
         input_variables=["context", "question"],
         template="""
-You are a legal document assistant.
+You are a legal assistant.
 
-Answer strictly using only the context provided.
-If the answer is not clearly present, say:
+Answer only from the provided context.
+
+If the answer is not present say:
 Not enough info in document.
 
 Context:
@@ -94,38 +110,40 @@ Answer:
     return retriever, chain
 
 
-retriever, chain = setup_rag()
+# ---------- PROCESS DOCUMENT ----------
+if process_btn:
+
+    if uploaded_file is None:
+        st.warning("Please upload a PDF first.")
+    else:
+        retriever, chain = setup_rag(uploaded_file)
+
+        st.session_state.retriever = retriever
+        st.session_state.chain = chain
+
+        st.success("✅ Document processed successfully!")
 
 
-# ---------- UI ----------
+# ---------- CHAT ----------
+if "retriever" in st.session_state:
 
-question = st.text_input("Ask a question about the document")
+    user_question = st.chat_input("Ask a question about the document...")
 
-if st.button("Get Answer"):
+    if user_question:
 
-    if question:
+        docs = st.session_state.retriever.invoke(user_question)
 
-        docs = retriever.invoke(question)
+        context = "\n\n".join([d.page_content for d in docs])
 
-        if not docs:
-            st.warning("Not enough info in document.")
-        else:
+        with st.spinner("Thinking..."):
 
-            context = "\n\n".join([d.page_content for d in docs])
+            answer = st.session_state.chain.invoke({
+                "context": context,
+                "question": user_question
+            })
 
-            with st.spinner("Answering..."):
+        st.chat_message("user").write(user_question)
+        st.chat_message("assistant").write(answer)
 
-                try:
-                    answer = chain.invoke({
-                        "context": context,
-                        "question": question
-                    })
-                    st.success(answer)
-
-                except Exception as e:
-
-                    if "RateLimitError" in str(e):
-                        st.error("⚠️ Groq API rate limit reached. Please wait 1–2 minutes and try again.")
-
-                    else:
-                        st.error(f"⚠️ Error: {str(e)}")
+else:
+    st.info("Upload and process a document to start chatting.")
