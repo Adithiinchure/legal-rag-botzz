@@ -65,8 +65,7 @@ def setup_rag(uploaded_file):
 
     chunks = splitter.split_text(full_text)
 
-    if os.path.exists("chroma_db"):
-        shutil.rmtree("chroma_db")
+   
 
     embeddings = HuggingFaceEmbeddings(
         model_name="BAAI/bge-small-en-v1.5"
@@ -75,7 +74,7 @@ def setup_rag(uploaded_file):
     vectordb = Chroma.from_texts(
         texts=chunks,
         embedding=embeddings,
-        persist_directory="chroma_db"
+        
     )
 
     retriever = vectordb.as_retriever(search_kwargs={"k": 3})
