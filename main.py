@@ -91,7 +91,7 @@ vectordb = Chroma.from_texts(
     metadatas=metadatas
 )
 
-retriever = vectordb.as_retriever(search_kwargs={"k": 3})
+retriever = vectordb.as_retriever(search_kwargs={"k": 6})
 
 print("Vector DB ready")
 
