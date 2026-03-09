@@ -143,46 +143,66 @@ if process_btn:
 # ---------- CHAT ----------
 if "retriever" in st.session_state:
 
-    # Display previous chat messages
-    for role, message in st.session_state.chat_history:
-        st.chat_message(role).write(message)
+    # Sidebar chat history
+    st.sidebar.markdown("### 💬 Chat History")
 
+    for msg in st.session_state.chat_history:
+
+        if msg["role"] == "user":
+            st.sidebar.markdown(f"**Question:** {msg['content']}")
+
+        else:
+            st.sidebar.markdown(f"**Answer:** {msg['content']}")
+
+            if "sources" in msg:
+                st.sidebar.markdown("Sources:")
+                for s in msg["sources"]:
+                    st.sidebar.write(f"📄 {s}")
+
+        st.sidebar.markdown("---")
+
+    # Main page input
     user_question = st.chat_input("Ask a question about the document...")
 
     if user_question:
+
+        # Show question in main page
+        st.chat_message("user").write(user_question)
 
         docs = st.session_state.retriever.invoke(user_question)
 
         context = "\n\n".join([d.page_content for d in docs])
 
         with st.spinner("Thinking..."):
-
             answer = st.session_state.chain.invoke({
                 "context": context,
                 "question": user_question
             })
 
-        # Save chat history
-        st.session_state.chat_history.append(("user", user_question))
-        st.session_state.chat_history.append(("assistant", answer))
+        # Show answer in main page
+        with st.chat_message("assistant"):
+            st.write(answer)
 
-        # Display messages
-        st.chat_message("user").write(user_question)
-        st.chat_message("assistant").write(answer)
+            st.markdown("**Sources:**")
 
-        # -------- Show Sources --------
-        sources = set(
-            f"{d.metadata['source']} (Page {d.metadata['page']})"
-            for d in docs
-        )
-
-        st.markdown("### 📄 Sources")
-        if docs:
+            source_list = []
             for d in docs:
-                source = d.metadata.get("source", "Unknown File")
-                page = d.metadata.get("page", "Unknown Page")
+                source = f"{d.metadata.get('source')} — Page {d.metadata.get('page')}"
+                source_list.append(source)
+                st.write(f"📄 {source}")
 
-                st.write(f"📑 {source} — Page {page}")
-        else:
-            st.write("No sources found.")
+        # Store in sidebar history
+        st.session_state.chat_history.append({
+            "role": "user",
+            "content": user_question
+        })
+
+        st.session_state.chat_history.append({
+            "role": "assistant",
+            "content": answer,
+            "sources": source_list
+        })
+
+else:
+    st.info("Upload and process a document to start chatting.")
 
