@@ -10,7 +10,6 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
-import shutil
 
 load_dotenv()
 
@@ -19,6 +18,10 @@ st.set_page_config(page_title="Legal RAG Bot", layout="wide")
 # -------- TITLE --------
 st.title("⚖️ Legal Document RAG Chatbot")
 st.write("Upload a legal PDF and ask questions based only on the document.")
+
+# -------- CHAT HISTORY INIT --------
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 # -------- SIDEBAR --------
 st.sidebar.header("📂 Upload Document")
@@ -50,31 +53,45 @@ def setup_rag(uploaded_file):
 
     reader = PdfReader(uploaded_file)
 
-    pages_text = []
-    for page in reader.pages:
-        text = page.extract_text()
-        if text:
-            pages_text.append(text)
+    documents = []
+    pdf_name = uploaded_file.name
 
-    full_text = "\n".join(pages_text)
+    for page_num, page in enumerate(reader.pages):
+        text = page.extract_text()
+
+        if text:
+            documents.append({
+                "text": text,
+                "page": page_num + 1,
+                "source": pdf_name
+            })
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200
     )
 
-    chunks = splitter.split_text(full_text)
+    texts = []
+    metadatas = []
 
-   
+    for doc in documents:
+        chunks = splitter.split_text(doc["text"])
+
+        for chunk in chunks:
+            texts.append(chunk)
+            metadatas.append({
+                "page": doc["page"],
+                "source": doc["source"]
+            })
 
     embeddings = HuggingFaceEmbeddings(
         model_name="BAAI/bge-small-en-v1.5"
     )
 
     vectordb = Chroma.from_texts(
-        texts=chunks,
+        texts=texts,
         embedding=embeddings,
-        
+        metadatas=metadatas
     )
 
     retriever = vectordb.as_retriever(search_kwargs={"k": 3})
@@ -126,6 +143,10 @@ if process_btn:
 # ---------- CHAT ----------
 if "retriever" in st.session_state:
 
+    # Display previous chat messages
+    for role, message in st.session_state.chat_history:
+        st.chat_message(role).write(message)
+
     user_question = st.chat_input("Ask a question about the document...")
 
     if user_question:
@@ -141,8 +162,27 @@ if "retriever" in st.session_state:
                 "question": user_question
             })
 
+        # Save chat history
+        st.session_state.chat_history.append(("user", user_question))
+        st.session_state.chat_history.append(("assistant", answer))
+
+        # Display messages
         st.chat_message("user").write(user_question)
         st.chat_message("assistant").write(answer)
 
-else:
-    st.info("Upload and process a document to start chatting.")
+        # -------- Show Sources --------
+        sources = set(
+            f"{d.metadata['source']} (Page {d.metadata['page']})"
+            for d in docs
+        )
+
+        st.markdown("### 📄 Sources")
+        if docs:
+            for d in docs:
+                source = d.metadata.get("source", "Unknown File")
+                page = d.metadata.get("page", "Unknown Page")
+
+                st.write(f"📑 {source} — Page {page}")
+        else:
+            st.write("No sources found.")
+
